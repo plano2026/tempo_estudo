@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PC SC - Cronômetro Imersivo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Adicionando Chart.js para o gráfico -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+
+        .timer-display {
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -0.05em;
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+        }
+        
+        /* Animação para o modo imersivo */
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body class="min-h-screen text-slate-800">
+
+    <!-- Main Content Container -->
+    <div class="max-w-6xl mx-auto px-4 py-8 md:py-12">
+        <!-- Header -->
+        <header class="mb-10 text-center">
+            <h1 class="text-4xl font-bold text-indigo-600 flex items-center justify-center gap-2">
+                <i data-lucide="graduation-cap"></i> PC SC
+            </h1>
+            <p class="text-slate-500 mt-2">Contabilize sua hora de estudo.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+            
+            <!-- Timer Section (3/5 columns on large screens) -->
+            <div class="lg:col-span-3 space-y-6">
+                <div class="glass-card p-8 rounded-3xl shadow-xl flex flex-col items-center justify-center min-h-[400px]">
+                    
+                    <!-- Select Subject Section (Substituiu o Input) -->
+                    <div class="w-full max-w-md mb-8 relative">
+                        <label class="block text-sm font-semibold text-slate-600 mb-2 ml-1">Selecione a Disciplina</label>
+                        <div class="relative">
+                            <select id="subjectSelect" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none bg-white/50 appearance-none cursor-pointer text-slate-700 font-medium">
+                                <option value="" disabled selected>Escolha o que vai estudar hoje...</option>
+                                <!-- Options serão preenchidas via JS -->
+                            </select>
+                            <i data-lucide="chevron-down" class="absolute right-4 top-3.5 text-slate-400 w-5 h-5 pointer-events-none"></i>
+                        </div>
+                    </div>
+
+                    <!-- Display (Modo Normal) -->
+                    <div class="timer-display text-7xl md:text-8xl font-bold text-slate-700 mb-10 tracking-tighter" id="mainTimerDisplay">
+                        00:00:00
+                    </div>
+
+                    <!-- Controls (Modo Normal) -->
+                    <div class="flex gap-4">
+                        <button id="startBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl font-bold text-lg flex items-center gap-2 transition-all transform active:scale-95 shadow-lg shadow-indigo-200">
+                            <i data-lucide="play" class="w-6 h-6"></i> Focar Agora
+                        </button>
+                    </div>
+                </div>
+
+                 <!-- Info Alert (Feedback) -->
+                 <div id="feedbackMessage" class="hidden animate-bounce bg-green-100 border border-green-200 text-green-700 px-4 py-3 rounded-xl flex items-center gap-2 justify-center">
+                    <i data-lucide="check-circle" class="w-5 h-5"></i>
+                    <span>Sessão de estudo registrada com sucesso!</span>
+                </div>
+            </div>
+
+            <!-- Dashboard Section (2/5 columns on large screens) -->
+            <div class="lg:col-span-2">
+                <div class="glass-card rounded-3xl shadow-xl p-6 h-full flex flex-col">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-xl font-bold flex items-center gap-2 text-slate-700">
+                            <i data-lucide="pie-chart" class="text-indigo-500"></i> Desempenho Gráfico
+                        </h2>
+                        <button id="clearData" class="text-xs text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1">
+                            <i data-lucide="trash-2" class="w-3 h-3"></i> Limpar
+                        </button>
+                    </div>
+
+                    <!-- Container do Gráfico -->
+                    <div class="flex-grow flex items-center justify-center relative p-4 min-h-[300px]">
+                        <div id="emptyChartMessage" class="hidden absolute inset-0 flex flex-col items-center justify-center text-slate-400 italic">
+                            <i data-lucide="bar-chart-4" class="w-12 h-12 mb-2 opacity-50"></i>
+                            Nenhum dado para exibir ainda.
+                        </div>
+                        <canvas id="studyChart"></canvas>
+                    </div>
+
+                    <div class="mt-6 pt-4 border-t border-slate-100 text-center">
+                         <span class="text-slate-500 text-sm">Tempo Total Acumulado</span>
+                        <div id="totalGlobalTime" class="font-bold text-2xl text-indigo-600 mt-1">0h 00m</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- IMMERSIVE OVERLAY (Fica escondido até dar play) -->
+    <div id="immersiveOverlay" class="hidden fixed inset-0 bg-black z-50 flex flex-col items-center justify-center text-white fade-in px-4">
+        <!-- Título da Matéria no Modo Imersivo -->
+        <h2 id="immersiveSubjectTitle" class="text-xl md:text-3xl font-medium text-indigo-300 mb-8 text-center opacity-80 tracking-wide">
+            Estudando...
+        </h2>
+        
+        <!-- Timer Gigante -->
+        <div id="immersiveTimerDisplay" class="timer-display text-[18vw] md:text-[12rem] font-bold leading-none tracking-tighter mb-12 text-white drop-shadow-2xl">
+            00:00:00
+        </div>
+
+        <!-- Controles Imersivos -->
+        <div class="flex gap-6 items-center">
+            <button id="immersivePauseBtn" class="bg-slate-800 hover:bg-slate-700 text-white p-6 rounded-full transition-all transform active:scale-90 border-2 border-slate-600 group">
+                <i data-lucide="pause" class="w-8 h-8 group-hover:scale-110 transition-transform"></i>
+            </button>
+            
+            <button id="immersiveStopBtn" class="bg-red-600 hover:bg-red-700 text-white p-6 rounded-full transition-all transform active:scale-90 shadow-lg shadow-red-900/30 group">
+                <i data-lucide="square" class="w-8 h-8 group-hover:scale-110 transition-transform fill-current"></i>
+            </button>
+        </div>
+         <p class="mt-8 text-slate-500 text-sm">Modo Foco Ativo</p>
+    </div>
+
+
+    <script>
+        // --- Configuração Inicial ---
+        const predefinedSubjects = [
+            "Noções de Direito Penal",
+            "Noções de Direito Processual Penal",
+            "Noções de Direito Constitucional",
+            "Noções de Direito Administrativo",
+            "Noções de Direitos Humanos",
+            "Legislação Institucional",
+            "Tecnologia da Informação e Crimes Digitais",
+            "Noções de Contabilidade",
+            "Noções de Administração",
+            "Língua Portuguesa",
+            "Raciocínio Lógico-Matemático"
+        ];
+
+        // --- Estado da Aplicação ---
+        let seconds = 0;
+        let timerInterval = null;
+        let isPaused = false;
+        let currentSubject = "";
+        let subjectsData = JSON.parse(localStorage.getItem('study_data')) || {};
+        let studyChartInstance = null; // Instância do gráfico Chart.js
+
+        // --- Elementos DOM (Main UI) ---
+        const mainTimerDisplay = document.getElementById('mainTimerDisplay');
+        const subjectSelect = document.getElementById('subjectSelect');
+        const startBtn = document.getElementById('startBtn');
+        const feedbackMessage = document.getElementById('feedbackMessage');
+        const totalGlobalTimeDisplay = document.getElementById('totalGlobalTime');
+        const clearDataBtn = document.getElementById('clearData');
+        const emptyChartMessage = document.getElementById('emptyChartMessage');
+
+        // --- Elementos DOM (Immersive UI) ---
+        const immersiveOverlay = document.getElementById('immersiveOverlay');
+        const immersiveTimerDisplay = document.getElementById('immersiveTimerDisplay');
+        const immersiveSubjectTitle = document.getElementById('immersiveSubjectTitle');
+        const immersivePauseBtn = document.getElementById('immersivePauseBtn');
+        const immersiveStopBtn = document.getElementById('immersiveStopBtn');
+        const pauseIcon = immersivePauseBtn.querySelector('i');
+
+        // --- Inicialização ---
+        function init() {
+            populateSubjectSelect();
+            lucide.createIcons();
+            updateDashboardChart();
+        }
+
+        // --- Funções Auxiliares ---
+        function populateSubjectSelect() {
+            predefinedSubjects.forEach(subject => {
+                const option = document.createElement('option');
+                option.value = subject;
+                option.textContent = subject;
+                subjectSelect.appendChild(option);
+            });
+        }
+
+        function formatTime(totalSeconds) {
+            const h = Math.floor(totalSeconds / 3600);
+            const m = Math.floor((totalSeconds % 3600) / 60);
+            const s = totalSeconds % 60;
+            return [h, m, s].map(v => v < 10 ? "0" + v : v).join(":");
+        }
+
+        function formatTimeReadable(totalSeconds) {
+            const h = Math.floor(totalSeconds / 3600);
+            const m = Math.floor((totalSeconds % 3600) / 60);
+            if (h === 0 && m === 0) return totalSeconds + "s";
+            let str = "";
+            if (h > 0) str += `${h}h `;
+            if (m > 0) str += `${m}m`;
+            return str.trim();
+        }
+
+
+        // --- Lógica do Cronômetro e Imersão ---
+        function updateTimerDisplays() {
+            seconds++;
+            const formatted = formatTime(seconds);
+            mainTimerDisplay.innerText = formatted;
+            immersiveTimerDisplay.innerText = formatted;
+        }
+
+        function startTimer() {
+            const subject = subjectSelect.value;
+            if (!subject) {
+                subjectSelect.parentElement.classList.add('shake');
+                subjectSelect.classList.add('border-red-400', 'bg-red-50');
+                setTimeout(() => {
+                    subjectSelect.parentElement.classList.remove('shake');
+                    subjectSelect.classList.remove('border-red-400', 'bg-red-50');
+                }, 1000);
+                return;
+            }
+            
+            currentSubject = subject;
+            isPaused = false;
+
+            // Prepara UI Imersiva
+            immersiveSubjectTitle.textContent = currentSubject;
+            mainTimerDisplay.innerText = formatTime(seconds);
+            immersiveTimerDisplay.innerText = formatTime(seconds);
+            pauseIcon.setAttribute('data-lucide', 'pause');
+            lucide.createIcons(); // Recarrega ícone
+            
+            // Mostra Overlay
+            immersiveOverlay.classList.remove('hidden');
+            document.body.style.overflow = 'hidden'; // Evita scroll no fundo
+
+            timerInterval = setInterval(updateTimerDisplays, 1000);
+        }
+
+        function togglePauseTimer() {
+            if (isPaused) {
+                // Retomar
+                isPaused = false;
+                timerInterval = setInterval(updateTimerDisplays, 1000);
+                pauseIcon.setAttribute('data-lucide', 'pause');
+                immersivePauseBtn.classList.remove('bg-amber-600', 'border-amber-500');
+                immersivePauseBtn.classList.add('bg-slate-800');
+
+            } else {
+                // Pausar
+                clearInterval(timerInterval);
+                isPaused = true;
+                pauseIcon.setAttribute('data-lucide', 'play');
+                immersivePauseBtn.classList.remove('bg-slate-800');
+                immersivePauseBtn.classList.add('bg-amber-600', 'border-amber-500');
+            }
+            lucide.createIcons();
+        }
+
+        function exitImmersiveMode() {
+            immersiveOverlay.classList.add('hidden');
+            document.body.style.overflow = 'auto';
+             // Reseta estilos do botão de pausa
+             isPaused = false;
+             pauseIcon.setAttribute('data-lucide', 'pause');
+             immersivePauseBtn.classList.remove('bg-amber-600', 'border-amber-500');
+             immersivePauseBtn.classList.add('bg-slate-800');
+        }
+
+        function stopAndSave() {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            
+            if (seconds > 0 && currentSubject) {
+                // Salvar dados
+                subjectsData[currentSubject] = (subjectsData[currentSubject] || 0) + seconds;
+                localStorage.setItem('study_data', JSON.stringify(subjectsData));
+                showFeedback();
+            }
+
+            // Resetar Estados
+            seconds = 0;
+            currentSubject = "";
+            mainTimerDisplay.innerText = "00:00:00";
+            immersiveTimerDisplay.innerText = "00:00:00";
+            subjectSelect.value = "";
+            
+            exitImmersiveMode();
+            updateDashboardChart();
+        }
+
+        // --- Lógica do Gráfico (Chart.js) ---
+        function updateDashboardChart() {
+            const subjects = Object.keys(subjectsData);
+            const times = Object.values(subjectsData);
+            const totalSecondsGlobal = times.reduce((a, b) => a + b, 0);
+
+            totalGlobalTimeDisplay.innerText = formatTimeReadable(totalSecondsGlobal);
+
+            if (subjects.length === 0) {
+                emptyChartMessage.classList.remove('hidden');
+                if (studyChartInstance) studyChartInstance.destroy();
+                return;
+            } else {
+                emptyChartMessage.classList.add('hidden');
+            }
+
+            const ctx = document.getElementById('studyChart').getContext('2d');
+
+            // Paleta de cores harmônica
+            const colors = [
+                '#6366f1', '#8b5cf6', '#d946ef', '#ec4899', '#f43f5e', 
+                '#f97316', '#eab308', '#84cc16', '#22c55e', '#06b6d4', '#3b82f6'
+            ];
+
+            // Se já existe gráfico, destrói para criar um novo
+            if (studyChartInstance) {
+                studyChartInstance.destroy();
+            }
+
+            studyChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: subjects,
+                    datasets: [{
+                        data: times,
+                        backgroundColor: colors.slice(0, subjects.length),
+                        borderWidth: 2,
+                        borderColor: '#ffffff',
+                        hoverOffset: 15
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '65%', // Faz a rosca ficar mais fina ou grossa
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                boxWidth: 12,
+                                padding: 15,
+                                font: { family: "'Inter', sans-serif", size: 11 },
+                                color: '#64748b'
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(30, 41, 59, 0.95)',
+                            titleFont: { family: "'Inter', sans-serif", size: 13, weight: 'bold' },
+                            bodyFont: { family: "'Inter', sans-serif", size: 14 },
+                            padding: 12,
+                            boxPadding: 6,
+                            callbacks: {
+                                // Formata o tempo no tooltip (ex: 3660s -> 1h 1m)
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.raw;
+                                    const percentage = Math.round((value / totalSecondsGlobal) * 100);
+                                    return ` ${label}: ${formatTimeReadable(value)} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    },
+                    layout: { padding: 20 }
+                }
+            });
+        }
+
+        function showFeedback() {
+            feedbackMessage.classList.remove('hidden');
+            setTimeout(() => {
+                feedbackMessage.classList.add('hidden');
+            }, 3000);
+        }
+
+        // --- Eventos ---
+        startBtn.addEventListener('click', startTimer);
+        immersivePauseBtn.addEventListener('click', togglePauseTimer);
+        immersiveStopBtn.addEventListener('click', stopAndSave);
+        
+        clearDataBtn.addEventListener('click', () => {
+            if (Object.keys(subjectsData).length === 0) return;
+            
+            if (confirm("Tem certeza que deseja apagar todos os registros de estudo? Isso não pode ser desfeito.")) {
+                subjectsData = {};
+                localStorage.removeItem('study_data');
+                updateDashboardChart();
+            }
+        });
+
+        // Efeito visual de "shake" para erro
+        const style = document.createElement('style');
+        style.innerHTML = `
+        .shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake { 10%, 90% { transform: translate3d(-1px, 0, 0); } 20%, 80% { transform: translate3d(2px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-4px, 0, 0); } 40%, 60% { transform: translate3d(4px, 0, 0); } }
+        `;
+        document.head.appendChild(style);
+
+        window.onload = init;
+    </script>
+</body>
+</html>
